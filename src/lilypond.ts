@@ -67,6 +67,130 @@ const outputToChannel = async (msg: string, show = false) => {
     )
   }
 }
+
+const getPdfOutputPath = (filePath: string, additionalArgs: string[]) => {
+  const fileDir = path.dirname(filePath)
+  const defaultPdfPath = path.join(
+    fileDir,
+    `${path.basename(filePath, path.extname(filePath))}.pdf`
+  )
+
+  const outputArgIndex = additionalArgs.findIndex(
+    (arg) => arg === `-o` || arg === `--output`
+  )
+  const joinedOutputArg = additionalArgs.find((arg) =>
+    arg.startsWith(`--output=`)
+  )
+  const compactOutputArg = additionalArgs.find(
+    (arg) => arg.startsWith(`-o`) && arg.length > 2
+  )
+
+  const outputArg =
+    (outputArgIndex >= 0 ? additionalArgs[outputArgIndex + 1] : undefined) ??
+    joinedOutputArg?.replace(/^--output=/, ``) ??
+    compactOutputArg?.replace(/^-o/, ``)
+
+  if (!outputArg) {
+    return defaultPdfPath
+  }
+
+  const outputPath = path.isAbsolute(outputArg)
+    ? outputArg
+    : path.join(fileDir, outputArg)
+
+  if (
+    outputArg.endsWith(path.sep) ||
+    (fs.existsSync(outputPath) && fs.statSync(outputPath).isDirectory())
+  ) {
+    return path.join(outputPath, path.basename(defaultPdfPath))
+  }
+
+  if (path.extname(outputPath).toLocaleLowerCase() === `.pdf`) {
+    return outputPath
+  }
+
+  return `${outputPath}.pdf`
+}
+
+const restoreFocusToDocument = async (
+  textDocument: vscode.TextDocument,
+  viewColumn: vscode.ViewColumn,
+  selection?: vscode.Selection
+) => {
+  await vscode.window.showTextDocument(textDocument, {
+    viewColumn,
+    preserveFocus: false,
+    preview: false,
+    selection,
+  })
+}
+
+const openPdf = async (
+  pdfPath: string,
+  mute: boolean,
+  sourceDocument: vscode.TextDocument
+) => {
+  if (!fs.existsSync(pdfPath)) {
+    logger(`PDF not found: ${pdfPath}`, LogLevel.warning, mute)
+    outputToChannel(`PDF not found: ${pdfPath}`, !mute)
+    return
+  }
+
+  try {
+    const sourceEditor = vscode.window.visibleTextEditors.find(
+      (editor) => editor.document.uri.fsPath === sourceDocument.uri.fsPath
+    )
+    const sourceViewColumn =
+      sourceEditor?.viewColumn ?? vscode.window.activeTextEditor?.viewColumn
+    const sourceSelection =
+      sourceEditor?.selection ?? vscode.window.activeTextEditor?.selection
+
+    await vscode.commands.executeCommand(
+      `vscode.open`,
+      vscode.Uri.file(pdfPath),
+      { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true }
+    )
+    if (sourceViewColumn) {
+      await restoreFocusToDocument(
+        sourceDocument,
+        sourceViewColumn,
+        sourceSelection
+      )
+      setTimeout(
+        () =>
+          restoreFocusToDocument(
+            sourceDocument,
+            sourceViewColumn,
+            sourceSelection
+          ),
+        100
+      )
+      setTimeout(
+        () =>
+          restoreFocusToDocument(
+            sourceDocument,
+            sourceViewColumn,
+            sourceSelection
+          ),
+        500
+      )
+    }
+    outputToChannel(`Opened PDF: ${pdfPath}`)
+  } catch (err) {
+    try {
+      await vscode.env.openExternal(vscode.Uri.file(pdfPath))
+      outputToChannel(`Opened PDF externally: ${pdfPath}`)
+    } catch (externalErr) {
+      logger(
+        `Unable to open PDF: ${err}; external open also failed: ${externalErr}`,
+        LogLevel.warning,
+        mute
+      )
+      outputToChannel(`Unable to open PDF: ${externalErr}`, !mute)
+    }
+  }
+}
+
 const getCompilationFilePath = (
   compileMode: CompileMode,
   activeTextDocument: vscode.TextDocument
@@ -160,9 +284,13 @@ export const compile = async (
 
     const config = getConfiguration(activeTextDocument)
     const additionalArgs: string[] =
-      config.compilation.additionalCommandLineArguments.trim().split(/\s+/)
+      config.compilation.additionalCommandLineArguments
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean)
 
     const args = [`--loglevel=WARNING`].concat(additionalArgs).concat(filePath)
+    const pdfPath = getPdfOutputPath(filePath, additionalArgs)
 
     if (compileMode === CompileMode.onSave) {
       outputToChannel(`[SAVED]: ${textDocument?.uri.fsPath}`)
@@ -194,6 +322,9 @@ export const compile = async (
       if (code === 0) {
         logger(`Compilation successful`, LogLevel.info, mute)
         outputToChannel(`Compilation successful`)
+        if (config.compilation.openPdfAfterCompilation !== false) {
+          openPdf(pdfPath, mute, activeTextDocument)
+        }
       } else if (code === null) {
         // here, the compilation process is replaced (i.e. killed above)
         logger(`Compilation killed`, LogLevel.error, mute)

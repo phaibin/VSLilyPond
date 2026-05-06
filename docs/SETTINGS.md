@@ -32,6 +32,14 @@ Type: `boolean`
 
 Default value: `true`
 
+### vslilypond.compilation.compileOnOpen
+
+Compiles LilyPond files when they are opened.
+
+Type: `boolean`
+
+Default value: `true`
+
 ### vslilypond.compilation.compileMainFileOnSave
 
 If true, compiles main file set in `Vslilypond › Compilation › Path To Main Compilation File`, else, compiles the currently active file.
@@ -47,6 +55,22 @@ Additional command line arguments supplied to `lilypond` upon compilation. Note 
 Type: `string`
 
 Default value: N/A
+
+### vslilypond.compilation.openPdfAfterCompilation
+
+Opens the generated PDF after successful compilation.
+
+Type: `boolean`
+
+Default value: `true`
+
+### vslilypond.compilation.goToPdfOnSelection
+
+Runs `LilyPond PDF Preview: Go to PDF location from Cursor` when text is selected in a LilyPond file.
+
+Type: `boolean`
+
+Default value: `true`
 
 ### vslilypond.compilation.pathToMainCompilationFile
 

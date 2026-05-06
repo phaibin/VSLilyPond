@@ -151,6 +151,13 @@
           "description": "Compiles file upon saving. Disable to improve performance. Reload required.",
           "scope": "resource"
         },
+        "vslilypond.compilation.compileOnOpen": {
+          "type": "boolean",
+          "default": true,
+          "group": "Compilation",
+          "description": "Compiles LilyPond files when they are opened.",
+          "scope": "resource"
+        },
         "vslilypond.compilation.compileMainFileOnSave": {
           "type": "boolean",
           "default": true,
@@ -163,6 +170,20 @@
           "default": "",
           "group": "Compilation",
           "description": "Additional command line arguments supplied to `lilypond` upon compilation. Note that `--loglevel=WARNING` is predefined. Intellisense also uses these arguments.",
+          "scope": "resource"
+        },
+        "vslilypond.compilation.openPdfAfterCompilation": {
+          "type": "boolean",
+          "default": true,
+          "group": "Compilation",
+          "description": "Opens the generated PDF after successful compilation.",
+          "scope": "resource"
+        },
+        "vslilypond.compilation.goToPdfOnSelection": {
+          "type": "boolean",
+          "default": true,
+          "group": "Compilation",
+          "description": "Runs `LilyPond PDF Preview: Go to PDF location from Cursor` when text is selected in a LilyPond file.",
           "scope": "resource"
         },
         "vslilypond.compilation.pathToMainCompilationFile": {

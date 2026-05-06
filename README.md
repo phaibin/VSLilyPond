@@ -79,6 +79,8 @@ See [docs/INSTALL.md](docs/INSTALL.md) for a setup guide.
 
 ### Compilation on save 💾
 
+Saved LilyPond files compile automatically and open the generated PDF when compilation succeeds.
+
 ![Compilation on save](./docs/assets/gifs/compileSave.gif)
 
 ### MIDI Input 🎹

@@ -11,6 +11,21 @@ import { MIDIOut } from "./midi-out"
 import { MIDIIn } from "./midi-in"
 import { langId } from "./consts"
 
+const goToPDFLocationFromCursorCommand =
+  "lilypond-pdf-preview.goToPDFLocationFromCursor"
+
+const restoreFocusToEditor = async (
+  editor: vscode.TextEditor,
+  selection: vscode.Selection
+) => {
+  await vscode.window.showTextDocument(editor.document, {
+    viewColumn: editor.viewColumn,
+    preserveFocus: false,
+    preview: false,
+    selection,
+  })
+}
+
 export function activate(context: vscode.ExtensionContext) {
   // need to make sure `lilypond` exists
   if (!lilypondExists()) {
@@ -53,13 +68,74 @@ export function activate(context: vscode.ExtensionContext) {
   )
   context.subscriptions.push(killCompilationCmd)
 
+  // compile when a LilyPond editor becomes active
+  if (config.compilation.compileOnOpen !== false) {
+    const compiledOnOpenDocuments = new Set<string>()
+    const compileOnOpenListener = vscode.window.onDidChangeActiveTextEditor(
+      (editor) => {
+        const textDoc = editor?.document
+        if (
+          textDoc?.languageId === langId &&
+          !compiledOnOpenDocuments.has(textDoc.uri.fsPath)
+        ) {
+          compiledOnOpenDocuments.add(textDoc.uri.fsPath)
+          setTimeout(() => compile(CompileMode.onSave, true, textDoc), 100)
+        }
+      }
+    )
+    context.subscriptions.push(compileOnOpenListener)
+
+    const activeTextDoc = vscode.window.activeTextEditor?.document
+    if (activeTextDoc?.languageId === langId) {
+      compiledOnOpenDocuments.add(activeTextDoc.uri.fsPath)
+      setTimeout(() => compile(CompileMode.onSave, true, activeTextDoc), 100)
+    }
+  }
+
   // compile upon saving
   if (config.compilation.compileOnSave) {
-    vscode.workspace.onDidSaveTextDocument((textDoc: vscode.TextDocument) => {
-      if (textDoc.languageId === langId) {
-        compile(CompileMode.onSave, true, textDoc)
+    const compileOnSaveListener = vscode.workspace.onDidSaveTextDocument(
+      (textDoc: vscode.TextDocument) => {
+        if (textDoc.languageId === langId) {
+          compile(CompileMode.onSave, true, textDoc)
+        }
       }
-    })
+    )
+    context.subscriptions.push(compileOnSaveListener)
+  }
+
+  if (config.compilation.goToPdfOnSelection !== false) {
+    let goToPdfOnSelectionTimeout: ReturnType<typeof setTimeout> | undefined
+    const goToPdfOnSelectionListener =
+      vscode.window.onDidChangeTextEditorSelection((event) => {
+        const { textEditor } = event
+        if (textEditor.document.languageId !== langId) {
+          return
+        }
+
+        if (
+          textEditor.selections.length !== 1 ||
+          textEditor.selection.isEmpty
+        ) {
+          return
+        }
+
+        if (goToPdfOnSelectionTimeout) {
+          clearTimeout(goToPdfOnSelectionTimeout)
+        }
+
+        const sourceSelection = textEditor.selection
+        goToPdfOnSelectionTimeout = setTimeout(async () => {
+          await vscode.commands.executeCommand(goToPDFLocationFromCursorCommand)
+          await restoreFocusToEditor(textEditor, sourceSelection)
+          setTimeout(
+            () => restoreFocusToEditor(textEditor, sourceSelection),
+            100
+          )
+        }, 150)
+      })
+
+    context.subscriptions.push(goToPdfOnSelectionListener)
   }
 
   // ===== ===== ===== INTELLISENSE ===== ===== =====
